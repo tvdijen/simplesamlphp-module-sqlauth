@@ -183,20 +183,22 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
             throw new Error\Error('WRONGUSERPASS');
         }
 
-        try {
-            $sth = $db->prepare($this->update_query);
-        } catch (PDOException $e) {
-            throw new Exception('sqlauth:' . $this->authId . ': - Failed to prepare query: ' . $e->getMessage());
-        }
+        if ($this->update_query !== null) {
+            try {
+                $sth = $db->prepare($this->update_query);
+            } catch (PDOException $e) {
+                throw new Exception('sqlauth:' . $this->authId . ': - Failed to prepare query: ' . $e->getMessage());
+            }
 
-        try {
-            $update = $sth->execute(['username' => $username, 'tablename' => $this->tablename]);
-        } catch (PDOException $e) {
-            throw new Exception('sqlauth:' . $this->authId . ': - Failed to execute query: ' . $e->getMessage());
-        }
+            try {
+                $update = $sth->execute(['username' => $username, 'tablename' => $this->tablename]);
+            } catch (PDOException $e) {
+                throw new Exception('sqlauth:' . $this->authId . ': - Failed to execute query: ' . $e->getMessage());
+            }
 
-        if ($sth->rowCount() !== 1) {
-            throw new Exception('Updating the last_logon failed.');
+            if ($sth->rowCount() !== 1) {
+                throw new Exception('Updating the last_logon failed.');
+            }
         }
 
         return [];
