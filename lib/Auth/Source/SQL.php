@@ -5,6 +5,7 @@ namespace SimpleSAML\Module\SqlAuth\Auth\Source;
 use Exception;
 use PDO;
 use PDOException;
+use SimpleSAML\Configuration;
 use SimpleSAML\Error;
 use SimpleSAML\Logger;
 
