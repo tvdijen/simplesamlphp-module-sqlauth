@@ -13,6 +13,7 @@ use SimpleSAML\Session;
 use SimpleSAML\Utils;
 use SimpleSAML\XHTML\Template;
 use Symfony\Component\HttpFoundation\Request;
+use Webmozart\Assert\Assert;
 
 /**
  * Controller class for the SqlAuth module.
