@@ -77,7 +77,7 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
                     '\' for authentication source ' . $this->authId);
             }
 
-            if (!is_string($config[$param]) || (!is_null($config[$param]) && ($param === 'update_query'))) {
+            if (!is_string($config[$param]) || !(is_null($config[$param]) && ($param === 'update_query'))) {
                 throw new Exception('Expected parameter \'' . $param .
                     '\' for authentication source ' . $this->authId .
                     ' to be a string. Instead it was: ' .
