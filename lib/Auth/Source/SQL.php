@@ -71,7 +71,7 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
         parent::__construct($info, $config);
 
         // Make sure that all required parameters are present.
-        foreach (['dsn', 'username', 'password', 'table_query', 'query', 'update_query'] as $param) {
+        foreach (['dsn', 'username', 'password', 'tablename', 'query', 'update_query'] as $param) {
             if (!array_key_exists($param, $config)) {
                 throw new Exception('Missing required configuration \'' . $param .
                     '\' for authentication source ' . $this->authId);
