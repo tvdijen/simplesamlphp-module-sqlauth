@@ -1,0 +1,3 @@
+pwreset-main:
+    path:       /
+    defaults:   { _controller: 'SimpleSAML\Module\SqlAuth\Controller\PasswordResetController::main' }
