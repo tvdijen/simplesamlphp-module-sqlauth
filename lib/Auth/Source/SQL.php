@@ -164,11 +164,11 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
             // No rows returned (or multiple users?) - invalid username
             Logger::error('sqlauth:' . $this->authId . ': Wrong username given.');
             throw new Error\Error('WRONGUSERPASS');
-        } elseif (!isset($data['password']) || $data['password'] === null) {
+        } elseif (!array_key_exists('password', $data[0]) || $data[0]['password'] === null) {
             // No password available or set to NULL
             Logger::error('sqlauth:' . $this->authId . ': No password.');
             throw new Error\Error('WRONGUSERPASS');
-        } elseif (password_verify($password, $data['password'])) {
+        } elseif (password_verify($password, $data[0]['password'])) {
             // Incorrect password
             Logger::error('sqlauth:' . $this->authId . ': Incorrect password.');
             throw new Error\Error('WRONGUSERPASS');
@@ -192,6 +192,6 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
             }
         }
 
-        return [];
+        return ['userPrincipalName' => [$data[0]['uid']]];
     }
 }
