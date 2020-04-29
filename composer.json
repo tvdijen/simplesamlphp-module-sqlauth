@@ -1,5 +1,5 @@
 {
-    "name": "tdvijen/simplesamlphp-module-sqlauth",
+    "name": "tvdijen/simplesamlphp-module-sqlauth",
     "description": "This is a basic authentication module for authenticating a user against a SQL database",
     "type": "simplesamlphp-module",
     "keywords": ["simplesamlphp", "sqlauth"],
