@@ -40,23 +40,14 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
     private $options;
 
     /**
-     * The query we should use to retrieve the attributes for the user.
-     *
-     * The username will be available as :username.
-     */
-    private $query;
-
-    /**
-     * The query we should use to update the last_logon attribute for the user.
-     *
-     * The username and table name will be available as :username and :tablename.
-     */
-    private $update_query;
-
-    /**
      * The name of the table used for user accounts.
      */
     private $tablename;
+
+    /**
+     * The module configuration.
+     */
+    private $moduleConfig;
 
 
     /**
@@ -71,13 +62,13 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
         parent::__construct($info, $config);
 
         // Make sure that all required parameters are present.
-        foreach (['dsn', 'username', 'password', 'tablename', 'query', 'update_query'] as $param) {
+        foreach (['dsn', 'username', 'password', 'tablename'] as $param) {
             if (!array_key_exists($param, $config)) {
                 throw new Exception('Missing required configuration \'' . $param .
                     '\' for authentication source ' . $this->authId);
             }
 
-            if (!is_string($config[$param]) && !(is_null($config[$param]) && ($param === 'update_query'))) {
+            if (!is_string($config[$param])) {
                 throw new Exception('Expected parameter \'' . $param .
                     '\' for authentication source ' . $this->authId .
                     ' to be a string. Instead it was: ' .
@@ -85,12 +76,11 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
             }
         }
 
+        $this->moduleConfig = Configuration::getOptionalConfig('module_sqlauth.php');
         $this->dsn = $config['dsn'];
         $this->username = $config['username'];
         $this->password = $config['password'];
         $this->tablename = $config['tablename'];
-        $this->query = $config['query'];
-        $this->update_query = $config['update_query'];
         if (isset($config['options'])) {
             $this->options = $config['options'];
         }
@@ -150,13 +140,13 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
         $db = $this->connect();
 
         try {
-            $sth = $db->prepare($this->query);
+            $sth = $db->prepare('SELECT * FROM `' . $this->tablename . '` WHERE uid = :username');
         } catch (PDOException $e) {
             throw new Exception('sqlauth:' . $this->authId . ': - Failed to prepare query: ' . $e->getMessage());
         }
 
         try {
-            $sth->execute(['username' => $username, 'tablename' => $this->tablename]);
+            $sth->execute(['username' => $username]);
         } catch (PDOException $e) {
             throw new Exception('sqlauth:' . $this->authId . ': - Failed to execute query: ' . $e->getMessage());
         }
@@ -183,15 +173,15 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
             throw new Error\Error('WRONGUSERPASS');
         }
 
-        if ($this->update_query !== null) {
+        if ($this->moduleConfig->getBoolean('update_last_logon', true)) {
             try {
-                $sth = $db->prepare($this->update_query);
+                $sth = $db->prepare('UPDATE `' . $this->tablename . '` SET last_logon=NOW() WHERE uid = :username');
             } catch (PDOException $e) {
                 throw new Exception('sqlauth:' . $this->authId . ': - Failed to prepare query: ' . $e->getMessage());
             }
 
             try {
-                $update = $sth->execute(['username' => $username, 'tablename' => $this->tablename]);
+                $update = $sth->execute(['username' => $username]);
             } catch (PDOException $e) {
                 throw new Exception('sqlauth:' . $this->authId . ': - Failed to execute query: ' . $e->getMessage());
             }

@@ -16,4 +16,9 @@ $config = [
      * show a minimalistic email form without authentication.
      */
     'authsource' => null,
+
+    /**
+     * The authentication source can write the last logon back to the database at the cost of an extra query.
+     */
+    'update_last_logon' => true,
 ];
