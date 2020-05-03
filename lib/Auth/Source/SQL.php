@@ -8,6 +8,7 @@ use Exception;
 use PDO;
 use PDOException;
 use SimpleSAML\Configuration;
+use SimpleSAML\Database;
 use SimpleSAML\Error;
 use SimpleSAML\Logger;
 
@@ -22,26 +23,6 @@ use SimpleSAML\Logger;
 
 class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
 {
-    /**
-     * The DSN we should connect to.
-     */
-    private $dsn;
-
-    /**
-     * The username we should connect to the database with.
-     */
-    private $username;
-
-    /**
-     * The password we should connect to the database with.
-     */
-    private $password;
-
-    /**
-     * The options that we should connect to the database with.
-     */
-    private $options;
-
     /**
      * The name of the table used for user accounts.
      */
@@ -65,63 +46,17 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
         parent::__construct($info, $config);
 
         // Make sure that all required parameters are present.
-        foreach (['dsn', 'username', 'password', 'tablename'] as $param) {
-            if (!array_key_exists($param, $config)) {
-                throw new Exception('Missing required configuration \'' . $param .
-                    '\' for authentication source ' . $this->authId);
-            }
+        if (!array_key_exists('tablename', $config)) {
+            throw new Exception('Missing required configuration \'tablename\' for authentication source ' . $this->authId);
+        }
 
-            if (!is_string($config[$param])) {
-                throw new Exception('Expected parameter \'' . $param .
-                    '\' for authentication source ' . $this->authId .
-                    ' to be a string. Instead it was: ' .
-                    var_export($config[$param], true));
-            }
+        if (!is_string($config['tablename'])) {
+            throw new Exception('Expected parameter \'tablename\' for authentication source ' . $this->authId .
+                ' to be a string. Instead it was: ' . var_export($config['tablename'], true));
         }
 
         $this->moduleConfig = Configuration::getOptionalConfig('module_sqlauth.php');
-        $this->dsn = $config['dsn'];
-        $this->username = $config['username'];
-        $this->password = $config['password'];
         $this->tablename = $config['tablename'];
-        if (isset($config['options'])) {
-            $this->options = $config['options'];
-        }
-    }
-
-
-    /**
-     * Create a database connection.
-     *
-     * @return \PDO  The database connection.
-     */
-    private function connect(): PDO
-    {
-        try {
-            $db = new PDO($this->dsn, $this->username, $this->password, $this->options);
-        } catch (PDOException $e) {
-            throw new Exception('sqlauth:' . $this->authId . ': - Failed to connect to \'' .
-                $this->dsn . '\': ' . $e->getMessage());
-        }
-
-        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        $driver = explode(':', $this->dsn, 2);
-        $driver = strtolower($driver[0]);
-
-        // Driver specific initialization
-        switch ($driver) {
-            case 'mysql':
-                // Use UTF-8
-                $db->exec("SET NAMES 'utf8mb4'");
-                break;
-            case 'pgsql':
-                // Use UTF-8
-                $db->exec("SET NAMES 'UTF8'");
-                break;
-        }
-
-        return $db;
     }
 
 
@@ -140,25 +75,13 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
      */
     protected function login(string $username, string $password): array
     {
-        $db = $this->connect();
+        $db = Database::getInstance();
 
-        try {
-            $sth = $db->prepare('SELECT * FROM `' . $this->tablename . '` WHERE uid = :username');
-        } catch (PDOException $e) {
-            throw new Exception('sqlauth:' . $this->authId . ': - Failed to prepare query: ' . $e->getMessage());
-        }
-
-        try {
-            $sth->execute(['username' => $username]);
-        } catch (PDOException $e) {
-            throw new Exception('sqlauth:' . $this->authId . ': - Failed to execute query: ' . $e->getMessage());
-        }
-
-        try {
-            $data = $sth->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            throw new Exception('sqlauth:' . $this->authId . ': - Failed to fetch result set: ' . $e->getMessage());
-        }
+        $stmt = $db->read(
+            'SELECT * FROM `' . $this->tablename . '` WHERE uid = :username',
+            ['username' => $username]
+        );
+        $data = $stmt->fetchAll();
 
         Logger::debug('sqlauth:' . $this->authId . ': Got ' . count($data) . ' rows from database');
 
@@ -170,30 +93,50 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
             // No password available or set to NULL
             Logger::error('sqlauth:' . $this->authId . ': No password.');
             throw new Error\Error('WRONGUSERPASS');
-        } elseif (password_verify($password, $data[0]['password'])) {
+        } elseif (password_verify($password, $data[0]['password']) === false) {
             // Incorrect password
             Logger::error('sqlauth:' . $this->authId . ': Incorrect password.');
             throw new Error\Error('WRONGUSERPASS');
         }
 
         if ($this->moduleConfig->getBoolean('update_last_logon', true)) {
-            try {
-                $sth = $db->prepare('UPDATE `' . $this->tablename . '` SET last_logon=NOW() WHERE uid = :username');
-            } catch (PDOException $e) {
-                throw new Exception('sqlauth:' . $this->authId . ': - Failed to prepare query: ' . $e->getMessage());
-            }
+            $stmt = $db->write(
+                'UPDATE `' . $this->tablename . '` SET last_logon=NOW() WHERE uid = :username',
+                ['username' => $username]
+            );
 
-            try {
-                $update = $sth->execute(['username' => $username]);
-            } catch (PDOException $e) {
-                throw new Exception('sqlauth:' . $this->authId . ': - Failed to execute query: ' . $e->getMessage());
-            }
-
-            if ($sth->rowCount() !== 1) {
+            if ($stmt === false) {
                 throw new Exception('Updating the last_logon failed.');
             }
         }
 
         return ['userPrincipalName' => [$data[0]['uid']]];
+    }
+
+
+    /**
+     * Attempt to retrieve the user's details from the database.
+     *
+     * On a successful attempt, this function should return the users attributes. On failure,
+     * it should throw an exception.
+     *
+     * @param string $uid  The user's identifier.
+     * @return array  Associative array with the users attributes.
+     */
+    public function getAttributes(string $uid): array
+    {
+        $db = Database::getInstance();;
+
+        $stmt = $db->read('SELECT * FROM `' . $this->tablename . '` WHERE uid = :username', ['username' => $uid]);
+        $data = $stmt->fetchAll();
+
+        Logger::debug('sqlauth:' . $this->authId . ': Got ' . count($data) . ' rows from database');
+
+        if (count($data) !== 1) {
+            // No rows returned (or multiple users?) - invalid username
+            Logger::error('sqlauth:' . $this->authId . ': Wrong username given.');
+        }
+
+        return $data;
     }
 }

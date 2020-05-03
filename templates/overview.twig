@@ -1,0 +1,31 @@
+{% set pagetitle = 'GovRoam passcode reset'|trans %}
+{% extends "base.twig" %}
+
+{% block content %}
+    <p>{% trans %}Welcome to the passcode reset page of GovRoam. Here you can see the expiry date of your passcode,
+     your last logon to GovRoam, and you can reset your passcode if you happen to have forgotten it.{% endtrans %}</p>
+
+    <h2>{% trans %}Your data{% endtrans %}</h2>
+
+    <table id="table_with_attributes" class="attributes pure-table pure-table-striped pure-table-attributes" summary="{% trans %}SAML Subject{% endtrans %}">
+      <tr class="{{ uid }}">
+        <td class="attrname">{% trans %}Account name{% endtrans %}</td>
+        <td class="attrvalue">{{ uid }}</td>
+      </tr>
+      <tr class="{{ last_logon }}">
+        <td class="attrname">{% trans %}Last logon{% endtrans %}</td>
+        <td class="attrvalue">{% if last_logon is null %}{% trans %}Never{% endtrans %}{% else %}{{ last_logon }}{% endif %}</td>
+      </tr>
+      <tr class="{{ password_last_set }}">
+        <td class="attrname">{% trans %}Last password change{% endtrans %}</td>
+        <td class="attrvalue">{% if password_last_set is null %}{% trans %}Never{% endtrans %}{% else %}{{ password_last_set }}{% endif %}</td>
+      </tr>
+    </table>
+    <br/>
+
+    <div class="center">
+      <a class="pure-button pure-button-red" href="{{ reseturl }}">{{ 'Generate new passcode'|trans }}</a>
+      &nbsp;&nbsp;
+      <a class="pure-button pure-button-red" href="{{ logouturl }}">{{ 'Logout'|trans }}</a>
+    </div>
+{% endblock %}

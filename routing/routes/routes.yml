@@ -1,3 +1,15 @@
 pwreset-main:
     path:       /
-    defaults:   { _controller: 'SimpleSAML\Module\SqlAuth\Controller\PasswordResetController::main' }
+    defaults:   { _controller: 'SimpleSAML\Module\SqlAuth\Controller\PasswordResetController::main'}
+
+pwreset-reset:
+    path:       /reset
+    defaults:   { _controller: 'SimpleSAML\Module\SqlAuth\Controller\PasswordResetController::reset'}
+
+pwreset-logout:
+    path:       /logout
+    defaults:   { _controller: 'SimpleSAML\Module\SqlAuth\Controller\PasswordResetController::logout' }
+
+pwreset-logout-finished:
+    path:       /logoutFinished
+    defaults:   { _controller: 'SimpleSAML\Module\SqlAuth\Controller\PasswordResetController::logoutFinished' }

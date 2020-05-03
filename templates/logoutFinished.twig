@@ -1,0 +1,8 @@
+{% set pagetitle = 'Logged out'|trans %}
+{% extends "base.twig" %}
+
+{% block content %}
+    <h1>{{ 'Logged out'|trans }}</h1>
+    <br>
+    <h3>{% trans %}You have been logged out. You may now close this window.{% endtrans %}</h3>
+{% endblock %}

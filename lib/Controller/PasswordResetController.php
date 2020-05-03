@@ -6,9 +6,9 @@ namespace SimpleSAML\Module\SqlAuth\Controller;
 
 use SimpleSAML\Auth;
 use SimpleSAML\Configuration;
-//use SimpleSAML\HTTP\RunnableResponse;
-//use SimpleSAML\Locale\Translate;
+use SimpleSAML\Database;
 use SimpleSAML\Module;
+use SimpleSAML\Module\SqlAuth\Auth\Source\SQL;
 use SimpleSAML\Session;
 use SimpleSAML\Utils;
 use SimpleSAML\XHTML\Template;
@@ -25,10 +25,28 @@ use Webmozart\Assert\Assert;
 class PasswordResetController
 {
     /** @var \SimpleSAML\Configuration */
-    protected $config;
+    private $config;
 
     /** @var \SimpleSAML\Session */
-    protected $session;
+    private $session;
+
+    /** @var \SimpleSAML\Auth\Source */
+    private $authsource;
+
+    /** @var string */
+    private $tablename;
+
+    /** @var string */
+    private $algorithm;
+
+    /** @var string */
+    private $userIdentifier;
+
+    /** @var string */
+    private const DEFAULT_IDP_AUTHSOURCE = 'DB-WIFI';
+
+    /** @var string */
+    private const DEFAULT_SP_AUTHSOURCE = 'default-sp';
 
 
     /**
@@ -41,6 +59,17 @@ class PasswordResetController
     {
         $this->config = $config;
         $this->session = $session;
+
+        $moduleConfig = Configuration::getOptionalConfig('module_sqlauth.php');
+        $authId = $moduleConfig->getString('authsource', self::DEFAULT_IDP_AUTHSOURCE);
+        $this->userIdentifier = $moduleConfig->getString('userIdentifier', 'urn:mace:dir:attribute-def:eduPersonPrincipalName');
+        $this->algorithm = $moduleConfig->getString('algorithm', PASSWORD_ARGON2I);
+
+        $authsourcesConfig = Configuration::getConfig('authsources.php');
+        $authsource = $authsourcesConfig->getArray($authId);
+
+        $this->tablename = $authsource['tablename'];
+        $this->authsource = new SQL(['AuthId' => $authId], $authsource);
     }
 
 
@@ -52,17 +81,126 @@ class PasswordResetController
      */
     public function main(Request $request): Template
     {
-        $authsource = new Auth\Simple('default-sp');
-        if (!is_null($request->query->get('logout'))) {
-            $authsource->logout($this->config->getBasePath() . 'logout.php');
-        } elseif (!is_null($request->query->get(Auth\State::EXCEPTION_PARAM))) {
-            // This is just a simple example of an error
-            /** @var array $state */
-            $state = Auth\State::loadExceptionState();
-            Assert::keyExists($state, Auth\State::EXCEPTION_DATA);
-            throw $state[Auth\State::EXCEPTION_DATA];
+        // Require authentication
+        $authsource = new Auth\Simple(self::DEFAULT_SP_AUTHSOURCE);
+        $this->requireAuth($authsource);
+
+        // Pull UID attributes from database
+        $uid = $this->session->getData('user', 'uid');
+        $attributes = $this->authsource->getAttributes($uid)[0];
+
+        $t = new Template($this->config, 'SqlAuth:overview.twig');
+        $t->data = [
+            'uid' => $attributes['uid'],
+            'last_logon' => $attributes['last_logon'],
+            'password_last_set' => $attributes['password_last_set'],
+            'mail' => $attributes['mail'],
+            'reseturl' => Module::getModuleURL('SqlAuth/reset', []),
+            'logouturl' => Module::getModuleURL('SqlAuth/logout', []),
+        ];
+
+        return $t;
+    }
+
+
+    /**
+     * Reset the user's password.
+     *
+     * @param \Symfony\Component\HttpFoundation\Request $request
+     * @return \SimpleSAML\XHTML\Template
+     */
+    public function reset(Request $request): Template
+    {
+        // Require authentication
+        $authsource = new Auth\Simple(self::DEFAULT_SP_AUTHSOURCE);
+        $this->requireAuth($authsource);
+
+        $passcode = $this->generatePasscode();
+
+        $uid = $this->session->getData('user', 'uid');
+        $this->writePasscode($uid, $passcode);
+
+        $t = new Template($this->config, 'SqlAuth:passwordReset.twig');
+        $t->data = [
+            'overviewurl' => Module::getModuleURL('SqlAuth/', []),
+            'logouturl' => Module::getModuleURL('SqlAuth/logout', []),
+            'passcode' => $passcode,
+        ];
+
+        return $t;
+    }
+
+
+    /**
+     * Log the user off.
+     *
+     * @return void
+     */
+    public function logout(): void
+    {
+        $authsource = new Auth\Simple(self::DEFAULT_SP_AUTHSOURCE);
+        $authsource->logout(Module::getModuleURL('SqlAuth/logoutFinished', []));
+    }
+
+
+    /**
+     * Say goodbye to the user.
+     *
+     * @return \SimpleSAML\XHTML\Template
+     */
+    public function logoutFinished(): Template
+    {
+        $t = new Template($this->config, 'SqlAuth:logoutFinished.twig');
+        $t->data = [];
+
+        return $t;
+    }
+
+
+    /**
+     * Generate a new passcode.
+     *
+     * @return string
+     */
+    private function generatePasscode(): string
+    {
+        $passcode = '';
+
+        for ($i = 0; $i < 6; $i++) {
+            $passcode .= strval(random_int(0, 9));
         }
 
+        return $passcode;
+    }
+
+
+    /**
+     * Write the user's passcode to the database.
+     *
+     * @param string $username
+     * @param string $passcode
+     */
+    private function writePasscode(string $username, string $passcode): void
+    {
+        $db = Database::getInstance();
+
+        $stmt = $db->write(
+            'UPDATE `' . $this->tablename . '` SET password_last_set=NOW(), password = :password WHERE uid = :username',
+            ['password' => password_hash($passcode, $this->algorithm), 'username' => $username]
+        );
+
+        if ($stmt === false) {
+            throw new Exception('Updating the last_logon failed.');
+        }
+    }
+
+
+    /**
+     * @param \SimpleSAML\Auth\Simple $authsource
+     * @return void
+     */
+    private function requireAuth(Auth\Simple $authsource): void
+    {
         if (!$authsource->isAuthenticated()) {
             $url = Module::getModuleURL('SqlAuth/', []);
             $params = [
@@ -72,18 +210,13 @@ class PasswordResetController
             $authsource->login($params);
         }
 
-        $attributes = $authsource->getAttributes();
-        $authData = [];
-        $t = new Template($this->config, 'SqlAuth:PasswordReset.twig', 'attributes');
+        // Get Authn attributes
+        $attributes_idp = $authsource->getAttributes();
 
-        $t->data = [
-            'attributes' => $attributes,
-            'attributesHtml' => '<h1>Dit zijn je attributen</h1>',
-            'authData' => $authData,
-            'nameid' => ['Format' => 'transient', 'NameQualifier' => 'test', 'SPNameQualifier' => 'test', 'SPProvidedID' => 'sp', 'value' => 'test'],
-            'logouturl' => Utils\HTTP::getSelfURLNoQuery() . '?logout',
-        ];
+        // Extract UID
+        Assert::keyExists($attributes_idp, $this->userIdentifier);
 
-        return $t;
+        $this->session->setData('user', 'uid', array_pop($attributes_idp[$this->userIdentifier]));
+        $this->session->save();
     }
 }

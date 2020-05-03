@@ -12,13 +12,17 @@ $config = [
     'algorithm' => PASSWORD_ARGON2I,
 
     /**
-     * The authentication source to be used by the password reset functionality. Set to `null` to
-     * show a minimalistic email form without authentication.
+     * The authentication source to be used by the password reset functionality.
      */
-    'authsource' => null,
+    'authsource' => 'DB-WIFI',
 
     /**
      * The authentication source can write the last logon back to the database at the cost of an extra query.
      */
     'update_last_logon' => true,
+
+    /**
+     * The identifier that's being used as the identifier in the database.
+     */
+    'userIdentifier' => 'urn:mace:dir:attribute-def:eduPersonPrincipalName',
 ];
