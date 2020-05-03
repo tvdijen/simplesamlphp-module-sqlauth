@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SimpleSAML\Module\SqlAuth\Controller;
 
+use Exception;
 use SimpleSAML\Auth;
 use SimpleSAML\Configuration;
 use SimpleSAML\Database;
@@ -30,13 +31,13 @@ class PasswordResetController
     /** @var \SimpleSAML\Session */
     private $session;
 
-    /** @var \SimpleSAML\Auth\Source */
+    /** @var \SimpleSAML\Auth\Simple */
     private $authsource;
 
     /** @var string */
     private $tablename;
 
-    /** @var string */
+    /** @var mixed|int */
     private $algorithm;
 
     /** @var string */
@@ -62,7 +63,10 @@ class PasswordResetController
 
         $moduleConfig = Configuration::getOptionalConfig('module_sqlauth.php');
         $authId = $moduleConfig->getString('authsource', self::DEFAULT_IDP_AUTHSOURCE);
-        $this->userIdentifier = $moduleConfig->getString('userIdentifier', 'urn:mace:dir:attribute-def:eduPersonPrincipalName');
+        $this->userIdentifier = $moduleConfig->getString(
+            'userIdentifier',
+            'urn:mace:dir:attribute-def:eduPersonPrincipalName'
+        );
         $this->algorithm = $moduleConfig->getString('algorithm', PASSWORD_ARGON2I);
 
         $authsourcesConfig = Configuration::getConfig('authsources.php');

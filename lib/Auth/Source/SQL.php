@@ -47,7 +47,9 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
 
         // Make sure that all required parameters are present.
         if (!array_key_exists('tablename', $config)) {
-            throw new Exception('Missing required configuration \'tablename\' for authentication source ' . $this->authId);
+            throw new Exception(
+                'Missing required configuration \'tablename\' for authentication source ' . $this->authId
+            );
         }
 
         if (!is_string($config['tablename'])) {
@@ -127,7 +129,10 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
     {
         $db = Database::getInstance();;
 
-        $stmt = $db->read('SELECT * FROM `' . $this->tablename . '` WHERE uid = :username', ['username' => $uid]);
+        $stmt = $db->read(
+            'SELECT * FROM `' . $this->tablename . '` WHERE uid = :username',
+            ['username' => $uid])
+        ;
         $data = $stmt->fetchAll();
 
         Logger::debug('sqlauth:' . $this->authId . ': Got ' . count($data) . ' rows from database');
