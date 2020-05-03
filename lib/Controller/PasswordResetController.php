@@ -31,7 +31,7 @@ class PasswordResetController
     /** @var \SimpleSAML\Session */
     private $session;
 
-    /** @var \SimpleSAML\Module\core\Auth\UserPassBase */
+    /** @var \SimpleSAML\Module\SqlAuth\Auth\Source\SQL */
     private $authsource;
 
     /** @var string */
