@@ -127,12 +127,12 @@ class SQL extends \SimpleSAML\Module\core\Auth\UserPassBase
      */
     public function getAttributes(string $uid): array
     {
-        $db = Database::getInstance();;
+        $db = Database::getInstance();
 
         $stmt = $db->read(
             'SELECT * FROM `' . $this->tablename . '` WHERE uid = :username',
-            ['username' => $uid])
-        ;
+            ['username' => $uid]
+        );
         $data = $stmt->fetchAll();
 
         Logger::debug('sqlauth:' . $this->authId . ': Got ' . count($data) . ' rows from database');
