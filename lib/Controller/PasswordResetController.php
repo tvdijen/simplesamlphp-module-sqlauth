@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace SimpleSAML\Module\SqlAuth\Controller;
 
 use Exception;
+use SimpleSAML\Assert\Assert;
 use SimpleSAML\Auth;
 use SimpleSAML\Configuration;
 use SimpleSAML\Database;
+use SimpleSAML\Locale\Translate;
+use SimpleSAML\Logger;
 use SimpleSAML\Module;
 use SimpleSAML\Module\SqlAuth\Auth\Source\SQL;
 use SimpleSAML\Session;
 use SimpleSAML\Utils;
 use SimpleSAML\XHTML\Template;
 use Symfony\Component\HttpFoundation\Request;
-use Webmozart\Assert\Assert;
 
 /**
  * Controller class for the SqlAuth module.
@@ -44,6 +46,9 @@ class PasswordResetController
     private $userIdentifier;
 
     /** @var string */
+    private $subject;
+
+    /** @var string */
     private const DEFAULT_IDP_AUTHSOURCE = 'DB-WIFI';
 
     /** @var string */
@@ -68,6 +73,7 @@ class PasswordResetController
             'urn:mace:dir:attribute-def:eduPersonPrincipalName'
         );
         $this->algorithm = $moduleConfig->getString('algorithm', PASSWORD_ARGON2I);
+        $this->subject = $moduleConfig->getString('mail.subject', ['en' => 'Your GovRoam passcode']);
 
         $authsourcesConfig = Configuration::getConfig('authsources.php');
         $authsource = $authsourcesConfig->getArray($authId);
@@ -90,15 +96,15 @@ class PasswordResetController
         $this->requireAuth($authsource);
 
         // Pull UID attributes from database
-        $uid = $this->session->getData('user', 'uid');
-        $attributes = $this->authsource->getAttributes($uid)[0];
+        $idp_attrs = $this->session->getData('user', 'idp_attributes');
+        $db_attrs = $this->authsource->getAttributes(array_pop($idp_attrs[$this->userIdentifier]))[0];
 
         $t = new Template($this->config, 'SqlAuth:overview.twig');
         $t->data = [
-            'uid' => $attributes['uid'],
-            'last_logon' => $attributes['last_logon'],
-            'password_last_set' => $attributes['password_last_set'],
-            'mail' => $attributes['mail'],
+            'uid' => $db_attrs['uid'],
+            'last_logon' => $db_attrs['last_logon'],
+            'password_last_set' => $db_attrs['password_last_set'],
+            'mail' => $db_attrs['mail'],
             'reseturl' => Module::getModuleURL('SqlAuth/reset', []),
             'logouturl' => Module::getModuleURL('SqlAuth/logout', []),
         ];
@@ -121,8 +127,11 @@ class PasswordResetController
 
         $passcode = $this->generatePasscode();
 
-        $uid = $this->session->getData('user', 'uid');
-        $this->writePasscode($uid, $passcode);
+        $idp_attrs = $this->session->getData('user', 'idp_attributes');
+        $db_attrs = $this->authsource->getAttributes(array_pop($idp_attrs[$this->userIdentifier]))[0];
+
+        $this->writePasscode($db_attrs['uid'], $passcode);
+        $this->emailPasscode($db_attrs['mail'], $passcode);
 
         $t = new Template($this->config, 'SqlAuth:passwordReset.twig');
         $t->data = [
@@ -200,6 +209,27 @@ class PasswordResetController
 
 
     /**
+     * Email the user's passcode.
+     *
+     * @param string $to  The recipient for the mail
+     * @param string $passcode  The newly generated passcode
+     */
+    private function emailPasscode(string $to, string $passcode): void
+    {
+        $translator = new Translate($this->config);
+        $mail = new Utils\EMail($translator->getPreferredTranslation($this->subject), 'tvdijen@hotmail.com', $to);
+        $mail->setData(['passcode' => $passcode]);
+//        $mail->generateBody('mail_passcode.twig');
+
+//        try {
+            $mail->send();
+//        } catch (\PHPMailer\PHPMailer\Exception $e) {
+//            Logger::warning("Unable to send passcode");
+//        }
+    }
+
+
+    /**
      * @param \SimpleSAML\Auth\Simple $authsource
      * @return void
      */
@@ -215,12 +245,12 @@ class PasswordResetController
         }
 
         // Get Authn attributes
-        $attributes_idp = $authsource->getAttributes();
+        $idp_attrs = $authsource->getAttributes();
 
-        // Extract UID
-        Assert::keyExists($attributes_idp, $this->userIdentifier);
+        // Require UID
+        Assert::keyExists($idp_attrs, $this->userIdentifier);
 
-        $this->session->setData('user', 'uid', array_pop($attributes_idp[$this->userIdentifier]));
+        $this->session->setData('user', 'idp_attributes', $idp_attrs);
         $this->session->save();
     }
 }
